@@ -67,8 +67,8 @@ if __name__ == "__main__":
     # hyperparameters
     parser = argparse.ArgumentParser()
     parser.add_argument("--batch_size", default=1, type=int)
-    parser.add_argument("--data_path", default='./dataset/test', type=str)
-    parser.add_argument("--dir_path", default='./out/Restormer', type=str)
+    parser.add_argument("--data_path", default='content/ID_Blau/dataset/test', type=str)
+    parser.add_argument("--dir_path", default='content/ID_Blau/out/Restormer', type=str)
     parser.add_argument("--model_path", default=None, type=str)
     parser.add_argument("--model", default='Restormer', type=str, choices=['Restormer', 'RestormerLocal'])
     parser.add_argument("--dataset", default='GoPro+HIDE', type=str, choices=['GoPro+HIDE', 'GoPro', 'HIDE', 'RealBlur_J', 'RealBlur_R', 'RWBI'])
