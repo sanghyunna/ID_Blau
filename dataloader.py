@@ -281,49 +281,84 @@ class GoPro_RealBlur_Loader(Dataset):
     
 class Test_Loader(Dataset):
     def __init__(self, data_path=None, crop_size=None, ZeroToOne=False):
-        assert data_path , "must have one dataset path !"
-        self.blur_list = []
-        self.sharp_list = []
+        assert data_path, "Must provide a dataset path!"
+        self.data_path = data_path
+        self.crop_size = crop_size
+        self.ZeroToOne = ZeroToOne
+
         self.is_sharp_dir = os.path.isdir(os.path.join(data_path, "target"))
 
         if crop_size:
-            self.transform = transforms.Compose([RandomCrop(crop_size, crop_size), Normalize(ZeroToOne), ToTensor()])
+            self.transform = transforms.Compose([
+                RandomCrop(crop_size, crop_size),
+                Normalize(ZeroToOne),
+                ToTensor()
+            ])
         else:
-            self.transform = transforms.Compose([Normalize(ZeroToOne), ToTensor()])
+            self.transform = transforms.Compose([
+                Normalize(ZeroToOne),
+                ToTensor()
+            ])
 
-        if data_path:
-            self.blur_list.extend(sorted(glob.glob(os.path.join(data_path, "input", '*.png'))))
-            if self.is_sharp_dir:
-                self.sharp_list.extend(sorted(glob.glob(os.path.join(data_path, "target", '*.png'))))
-        
+        # image path 수집
+        self.blur_list = sorted(glob.glob(os.path.join(data_path, "input", '*.png')))
         if self.is_sharp_dir:
-            assert len(self.sharp_list) == len(self.blur_list), "Missmatched Length!"
+            self.sharp_list = sorted(glob.glob(os.path.join(data_path, "target", '*.png')))
+            # 파일명에서 추출한 ID를 기반으로 이미지 페어 생성
+            self.blur_sharp_pairs = self._create_blur_sharp_pairs()
+            assert len(self.blur_sharp_pairs) > 0, "No matching blur and sharp image pairs found!"
+        else:
+            self.blur_sharp_pairs = [(blur_path, None) for blur_path in self.blur_list]
+
+    def _create_blur_sharp_pairs(self):
+        # sharp 이미지 경로를 ID를 기반으로 딕셔너리 생성
+        sharp_id_to_path = {}
+        for sharp_path in self.sharp_list:
+            sharp_id = os.path.splitext(os.path.basename(sharp_path))[0]
+            sharp_id_to_path[sharp_id] = sharp_path
+
+        blur_sharp_pairs = []
+        for blur_path in self.blur_list:
+            blur_id = os.path.splitext(os.path.basename(blur_path))[0]
+            if blur_id in sharp_id_to_path:
+                sharp_path = sharp_id_to_path[blur_id]
+                blur_sharp_pairs.append((blur_path, sharp_path))
+            else:
+                # sharp 이미지가 없는 경우
+                continue
+
+        return blur_sharp_pairs
 
     def __len__(self):
-        return len(self.blur_list)
+        return len(self.blur_sharp_pairs)
 
     def __getitem__(self, idx):
-        blur = cv2.imread(self.blur_list[idx]).astype(np.float32)
-        blur = cv2.cvtColor(blur, cv2.COLOR_BGR2RGB)
-        if self.is_sharp_dir:
-            sharp = cv2.imread(self.sharp_list[idx]).astype(np.float32)
-            sharp = cv2.cvtColor(sharp, cv2.COLOR_BGR2RGB)
+        blur_path, sharp_path = self.blur_sharp_pairs[idx]
 
-            sample = {'blur': blur,
-                    'sharp': sharp}
+        # 이미지 로드
+        blur = cv2.imread(blur_path).astype(np.float32)
+        blur = cv2.cvtColor(blur, cv2.COLOR_BGR2RGB)
+
+        if sharp_path:
+            sharp = cv2.imread(sharp_path).astype(np.float32)
+            sharp = cv2.cvtColor(sharp, cv2.COLOR_BGR2RGB)
+            sample = {'blur': blur, 'sharp': sharp}
         else:
             sample = {'blur': blur}
 
+        # transform 적용
         if self.transform:
             sample = self.transform(sample)
 
         return sample
-    
+
     def get_path(self, idx):
-        if self.is_sharp_dir:
-            return {'blur_path': self.blur_list[idx], 'sharp_path': self.sharp_list[idx]}
+        blur_path, sharp_path = self.blur_sharp_pairs[idx]
+        if sharp_path:
+            return {'blur_path': blur_path, 'sharp_path': sharp_path}
         else:
-            return {'blur_path': self.blur_list[idx]}
+            return {'blur_path': blur_path}
+
 
 def get_image(path):
     transform = transforms.Compose([Normalize(), ToTensor()])
