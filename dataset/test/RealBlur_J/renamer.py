@@ -2,7 +2,7 @@ import os
 import re
 
 # Define the directory containing the images
-directory = "./target"
+directory = "D:/dev/ID_Blau/dataset/test/RealBlur_J/input"
 
 # Regular expression pattern to match files with names composed only of integers
 pattern = re.compile(r"^\d+\.jpg$")

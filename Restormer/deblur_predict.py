@@ -23,22 +23,31 @@ def predict(model, args, device):
         dataset_name = [args.dataset]
 
     for val_dataset_name in dataset_name:
-        dataset_path = os.path.join(args.data_path, val_dataset_name)
+        # dataset_path = os.path.join(args.data_path, val_dataset_name)
+        dataset_path = args.data_path + '/' + val_dataset_name
+        
+        # Ensure the dataset path exists
+        assert os.path.exists(dataset_path), f"Dataset path {dataset_path} does not exist."
 
         dataset = Test_Loader(data_path=dataset_path,
                                 crop_size=args.crop_size,
                                 ZeroToOne=False)
+        
+        # Ensure the dataset is not empty
+        assert len(dataset) > 0, f"Dataset at {dataset_path} is empty."
+
         save_dir = os.path.join(args.dir_path, 'results', f'{val_dataset_name}')
-        os.makedirs(save_dir)
+        os.makedirs(save_dir, exist_ok=True)
         dataset_len = len(dataset)
         tq = tqdm.tqdm(range(dataset_len))
         tq.set_description(f'Predict {val_dataset_name}')
 
         for idx in tq:
             sample = dataset[idx]
+            assert 'blur' in sample, f"Sample at index {idx} does not contain 'blur' key."
             input = sample['blur'].unsqueeze(0).to(device)
             b, c, h, w = input.shape
-            factor=8
+            factor = 8
             h_n = (factor - h % factor) % factor
             w_n = (factor - w % factor) % factor
             input = torch.nn.functional.pad(input, (0, w_n, 0, h_n), mode='reflect')
@@ -51,7 +60,7 @@ def predict(model, args, device):
             save_img_path = os.path.join(save_dir, image_name)
 
             save_image(output.squeeze(0).cpu() + 0.5, save_img_path)
-
+            print(f"Saved image {save_img_path}")
 
 
 if __name__ == "__main__":
@@ -68,7 +77,12 @@ if __name__ == "__main__":
     args = parser.parse_args()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("device :", device)
-    load_model_state = torch.load(args.model_path)
+
+    # Ensure the dataset path exists
+    assert os.path.exists(args.data_path), f"Dataset path {args.data_path} does not exist."
+
+    # Ensure the model path exists
+    assert os.path.exists(args.model_path), f"Model path {args.model_path} does not exist."
 
     if not os.path.isdir(args.dir_path):
         os.makedirs(args.dir_path)
@@ -81,8 +95,8 @@ if __name__ == "__main__":
     else:
         raise ValueError("model must be Restormer or RestormerLocal")
     
-    
     load_model_state = torch.load(args.model_path)
+    assert load_model_state is not None, "Failed to load model state."
 
     if 'model_state' in load_model_state.keys():
         load_model_state["model_state"] = judge_and_remove_module_dict(load_model_state["model_state"])
@@ -100,9 +114,11 @@ if __name__ == "__main__":
     net = nn.DataParallel(net)
     net.to(device)
 
+    # Ensure the model is on the correct device
+    assert next(net.parameters()).is_cuda, "Model is not on CUDA device."
+
     print("device:", device)
     print(f'args: {args}')
-    print(f'model: {net}')
     print(f'model parameters: {count_parameters(net)}')
 
     same_seed(2023)
